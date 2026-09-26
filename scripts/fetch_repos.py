@@ -23,6 +23,14 @@ REPOSITORIES = {
         "url": "https://github.com/fastapi/fastapi.git",
         "commit": "192b12197eb04c2b4a691cce7d87261b21716714",
     },
+    "django": {
+        "url": "https://github.com/django/django.git",
+        "commit": "4fab678a0739d54401ccee7eb587553657c9f76e",
+    },
+    "aiohttp": {
+        "url": "https://github.com/aio-libs/aiohttp.git",
+        "commit": "1133ceb762e67f27d6b64f0c541e01c53a60760b",
+    },
 }
 
 
@@ -36,6 +44,8 @@ def fetch(name: str, destination: Path) -> dict:
         destination.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(["git", "clone", spec["url"], str(destination)], check=True)
     else:
+        if run(["git", "rev-parse", "--is-shallow-repository"], cwd=destination) == "true":
+            run(["git", "fetch", "--unshallow", "origin"], cwd=destination)
         run(["git", "fetch", "--all", "--tags"], cwd=destination)
     run(["git", "checkout", "--detach", spec["commit"]], cwd=destination)
     actual = run(["git", "rev-parse", "HEAD"], cwd=destination)

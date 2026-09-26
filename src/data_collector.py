@@ -315,13 +315,17 @@ def extract_all_metrics_for_file(repo_path, file_rel_path,
 
 
 def build_dataset_from_repo(repo_path, output_csv_path,
-                            timeframe_months=12):
+                             timeframe_months=12, max_files=None):
     """
     Mine all Python files in repo_path and write a CSV to output_csv_path.
 
     timeframe_months (default 12):
         Production default. Controls snapshot lookback window.
         Cloud deployment used 3 months to avoid timeouts.
+    max_files (default None):
+        Optional deterministic cap applied after sorting relative paths. This
+        is useful for bounded large-repository experiments and is recorded by
+        the caller in the experiment configuration.
     """
     print(f"\nScanning repository: {repo_path}")
     print(f"Snapshot window: {timeframe_months} months back")
@@ -335,6 +339,9 @@ def build_dataset_from_repo(repo_path, output_csv_path,
             if file.endswith('.py'):
                 py_files.append(os.path.join(root, file))
 
+    py_files.sort(key=lambda path: os.path.relpath(path, repo_path).replace('\\', '/'))
+    if max_files is not None:
+        py_files = py_files[:max_files]
     print(f"Found {len(py_files)} Python files. Mining (this takes a while "
           f"on large repos)...")
 

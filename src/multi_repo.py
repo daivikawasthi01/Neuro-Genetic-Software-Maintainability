@@ -40,6 +40,7 @@ REPO_REGISTRY: dict = {
     'flask':    'test_repos/flask',
     'requests': 'test_repos/requests',
     'django':   'test_repos/django',
+    'aiohttp':  'test_repos/aiohttp',
     'fastapi':  'test_repos/fastapi',
     'numpy':    'test_repos/numpy',
 }
