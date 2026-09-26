@@ -199,6 +199,38 @@ git clone https://github.com/tiangolo/fastapi.git      test_repos/fastapi
 bash run.sh
 ```
 
+### Reproducible Tier 1 experiments
+
+The experiment modules use Python seed `42` by default, 20 independent
+trials, five-fold stratified cross-validation, and record provenance in
+`results/RUN_LOG.md`. To acquire the pinned repository revisions and rebuild
+the FastAPI dataset:
+
+```bash
+./venv/bin/python scripts/fetch_repos.py
+./venv/bin/python main.py \
+  --repo test_repos/fastapi \
+  --raw-file data/fastapi_dataset.csv \
+  --processed-file data/fastapi_dataset_clean.csv \
+  --run-tuning --run-baselines --run-stats \
+  --n-trials 20 --seed 42 --force-all
+```
+
+To regenerate the category ablation using the same protocol:
+
+```bash
+./venv/bin/python main.py \
+  --repo test_repos/fastapi \
+  --raw-file data/fastapi_dataset.csv \
+  --processed-file data/fastapi_dataset_clean.csv \
+  --skip-ga --run-ablation \
+  --n-trials 20 --seed 42 --force-all
+```
+
+The resulting raw trial values, statistical summaries, tuned XGBoost
+comparison, repository pins, and changed-number notes are written under
+`data/results/` and `results/`.
+
 Runs the complete pipeline and generates an HTML report. Takes **15–30 minutes**.
 
 ### Option 2 — Interactive Dashboard
