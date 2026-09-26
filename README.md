@@ -231,6 +231,33 @@ The resulting raw trial values, statistical summaries, tuned XGBoost
 comparison, repository pins, and changed-number notes are written under
 `data/results/` and `results/`.
 
+To regenerate the multi-repository Table 7/8-equivalent artifact after the
+three pinned repositories are present:
+
+```bash
+./venv/bin/python main.py \
+  --multi-repo --repos flask requests fastapi \
+  --n-trials 20 --seed 42 --force-all
+```
+
+To regenerate the sensitivity artifact used for the Figure 7-equivalent
+analysis and the standalone HTML report:
+
+```bash
+./venv/bin/python main.py \
+  --repo test_repos/fastapi \
+  --raw-file data/fastapi_dataset.csv \
+  --processed-file data/fastapi_dataset_clean.csv \
+  --skip-collect --skip-ga --run-sensitivity --run-report \
+  --seed 42 --force-all
+```
+
+The GA history in `ga_results.json` is the source for convergence figures,
+the baseline/statistics artifacts are the source for the main comparison
+figures, and the multi-repository/sensitivity JSON files are the source for
+the cross-repository and sensitivity figures. Figure rendering remains a
+paper-side step; these commands regenerate the numerical source artifacts.
+
 Runs the complete pipeline and generates an HTML report. Takes **15–30 minutes**.
 
 ### Option 2 — Interactive Dashboard
