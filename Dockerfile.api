@@ -12,9 +12,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt requirements_api.txt ./
 
 # Core ML stack (torch CPU — saves ~1.5GB vs GPU build)
-RUN pip install --no-cache-dir \
+RUN grep -v '^xgboost==' requirements.txt > /tmp/requirements.cpu.txt && \
+    pip install --no-cache-dir \
     --extra-index-url https://download.pytorch.org/whl/cpu \
-    -r requirements.txt
+    -r /tmp/requirements.cpu.txt && \
+    pip install --no-cache-dir --no-deps xgboost==2.1.4
 
 # API-specific deps
 RUN pip install --no-cache-dir -r requirements_api.txt

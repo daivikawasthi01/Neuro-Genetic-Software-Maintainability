@@ -74,7 +74,10 @@ def run_validation(
     repository = git.Repo(repo_path)
     commits = list(repository.iter_commits())
     rng = random.Random(seed)
-    selected = rng.sample(commits, min(sample_size, len(commits)))
+    if sample_size <= 0:
+        selected = commits
+    else:
+        selected = rng.sample(commits, min(sample_size, len(commits)))
     records = []
     blocked = []
     for commit in selected:
@@ -96,6 +99,7 @@ def run_validation(
             "repo_path": repo_path,
             "github_repository": f"{owner}/{repo_name}",
             "sample_size": sample_size,
+            "sample_selection": "all local commits" if sample_size <= 0 else "seeded random sample",
             "seed": seed,
             "ground_truth": "GitHub pull-request labels containing a bug-like label",
         }),
@@ -135,7 +139,10 @@ if __name__ == "__main__":
     parser.add_argument("--repo-path", default="test_repos/flask")
     parser.add_argument("--owner", default="pallets")
     parser.add_argument("--repo", default="flask")
-    parser.add_argument("--sample-size", type=int, default=50)
+    parser.add_argument(
+        "--sample-size", type=int, default=50,
+        help="Number of commits to sample; use 0 for the full local history",
+    )
     parser.add_argument("--seed", type=int, default=DEFAULT_BASE_SEED)
     parser.add_argument("--output", default="results/label_validation.json")
     parser.add_argument("--token", default=None)

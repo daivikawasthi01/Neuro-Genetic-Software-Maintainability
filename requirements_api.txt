@@ -1,7 +1,7 @@
 # API server dependencies (add to existing requirements.txt env)
-fastapi==0.141.1
-uvicorn[standard]==0.54.0
-pydantic==2.13.5
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.6
 
 # Optional — comment out if disk space is tight:
 # shap>=0.45,<1.0          # SHAP feature importance (requires torch)

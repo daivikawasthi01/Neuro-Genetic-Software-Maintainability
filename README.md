@@ -218,6 +218,68 @@ the FastAPI dataset:
 
 To regenerate the category ablation using the same protocol:
 
+### Tier 2 regeneration
+
+Acquire the additional pinned repositories and regenerate the bounded
+multi-repository artifacts:
+
+```bash
+./venv/bin/python scripts/fetch_repos.py flask requests fastapi django aiohttp
+./venv/bin/python main.py \
+  --repo test_repos/flask \
+  --raw-file data/flask_t2_dataset.csv \
+  --processed-file data/flask_t2_dataset_clean.csv \
+  --skip-collect --run-tuning --run-baselines \
+  --n-trials 20 --tune-trials 50 --seed 42 --force-ga
+./venv/bin/python main.py \
+  --repo test_repos/requests \
+  --raw-file data/requests_t2_dataset.csv \
+  --processed-file data/requests_t2_dataset_clean.csv \
+  --skip-collect --run-tuning --run-baselines \
+  --n-trials 20 --tune-trials 50 --seed 42 --force-ga
+./venv/bin/python -m src.nncp_baseline \
+  --n-trials 20 --seed 42 \
+  --output results/nncp_results.json \
+  flask=data/flask_t2_dataset_clean.csv \
+  requests=data/requests_t2_dataset_clean.csv \
+  fastapi=data/fastapi_dataset_clean.csv
+```
+
+Django and aiohttp use the same pipeline with `max_files=100` during
+collection because full Django history traversal is not bounded on a local
+machine. The exact cap and dataset hashes are recorded in
+`results/MULTI_REPO_COMPARISON.md`.
+
+Validate the commit-message bug heuristic against a seeded external signal:
+
+```bash
+./venv/bin/python scripts/validate_bug_labels.py --sample-size 50 --seed 42
+```
+
+### Tier 3 utilities
+
+The language-extension collector supports bounded Java datasets and records
+the source commit and output hash. It deliberately labels its lexical
+cyclomatic measure as a proxy rather than pretending it is equivalent to the
+Python Radon feature:
+
+```bash
+./venv/bin/python scripts/collect_java_metrics.py \
+  /path/to/pinned/java/repository data/java_dataset.csv --max-files 100 --seed 42
+```
+
+The containerized backend and research environment can be validated with:
+
+```bash
+docker compose config
+DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose build backend research
+docker compose up backend frontend
+```
+
+Full Java-repository acquisition and full-history issue/PR relabelling remain
+explicit follow-up runs because they require selecting external repositories
+and authenticated API access; no unsupported numbers are generated for them.
+
 ```bash
 ./venv/bin/python main.py \
   --repo test_repos/fastapi \

@@ -34,7 +34,9 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY requirements.txt .
 COPY requirements_api.txt .
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt && \
+    grep -v '^xgboost==' requirements.txt > /tmp/requirements.cpu.txt && \
+    pip install --no-cache-dir -r /tmp/requirements.cpu.txt && \
+    pip install --no-cache-dir --no-deps xgboost==2.1.4 && \
     pip install --no-cache-dir -r requirements_api.txt
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 ## Implementation and Experimental Update
 
 **Date:** 26 September 2026  
-**Scope:** Tier 1 implementation from the revision and technical plans
+**Scope:** Tier 1, Tier 2, and Tier 3 implementation work requested for the current reproducibility upgrade
 
 ## 1. Overview
 
@@ -118,6 +118,38 @@ cross-validation.
 The GA-selected model therefore remained better than the All-Features model
 under the equal-powered 20-trial protocol.
 
+## 5. Tier 2 additions
+
+### NNCP-style baseline
+
+Added a Pearson-filtered structural baseline using the same ANN, five-fold
+protocol, 20 trials, and seed schedule. GA had lower mean MSE than NNCP on all
+three original repositories:
+
+| Repository | NNCP mean MSE | GA ANN mean MSE |
+|---|---:|---:|
+| Flask | 0.5071 | 0.3393 |
+| Requests | 1.2693 | 0.3973 |
+| FastAPI | 0.4968 | 0.1236 |
+
+The raw values and paired two-sided tests are in `results/nncp_results.json`.
+
+### Label validation
+
+The commit-message bug heuristic was evaluated on a seeded 50-commit Flask
+sample against GitHub pull-request labels. It achieved precision 0.0000,
+recall 0.0000, and Cohen's kappa -0.0396. This is recorded as evidence that
+the heuristic should not be treated as validated ground truth.
+
+### Additional repositories
+
+Fresh pinned Django and aiohttp repositories were added. A deterministic
+100-file cap was used for their local collection because full Django history
+traversal is not bounded on this machine. GA improved the all-feature result
+for aiohttp, while the bounded Django sample was slightly worse. Details,
+commit hashes, timings, and dataset hashes are in
+`results/MULTI_REPO_COMPARISON.md`.
+
 ### GA feature-selection result
 
 The GA selected 9 of 18 features:
@@ -151,7 +183,7 @@ The full 20-trial ablation produced these means:
 The results show that evolutionary features provide substantial predictive
 value, especially when combined with structural features.
 
-## 5. Main improvements over the previous implementation
+## 6. Main improvements over the previous implementation
 
 | Area | Previous limitation | Improvement |
 |---|---|---|
@@ -163,8 +195,12 @@ value, especially when combined with structural features.
 | XGBoost fairness | Only untuned XGBoost was reported | Tuned 50-trial XGBoost added and preserved alongside untuned results |
 | Dataset revisions | Repository revisions were undocumented | Immutable repository commits recorded |
 | Backend startup | `uvicorn` could be missing from the active shell | Backend dependencies and virtual-environment execution fixed |
+| Structural baseline | No directly comparable Pearson-filtered baseline | NNCP-style baseline uses the identical ANN/trial protocol |
+| Repository coverage | Three Python repositories | Two additional pinned Python repositories with bounded, measured runs |
+| Cross-language path | No Java collection entry point | Added a reproducible Java metric adapter with explicit proxy semantics |
+| Container portability | ARM64 dependency resolution failed for XGBoost | Documented AMD64 target and removed unnecessary NCCL dependency expansion |
 
-## 6. How the system was improved
+## 7. How the system was improved
 
 The system was improved in five main ways.
 
@@ -203,13 +239,31 @@ while preserving the untuned result for transparency. The tuned model improved
 from MSE `0.297551` to `0.284552`, although it still did not outperform the
 ANN-based models.
 
-### 6.5 Easier reproduction and presentation
+### 7.5 Easier reproduction and presentation
 
 The project now includes pinned repository revisions, pinned dependencies,
 dataset hashes, run logs, seed verification, and copy-pasteable commands.
 This makes it possible for another researcher to reproduce the experiment and
 trace each reported number back to a specific dataset, configuration, seed,
 and source artifact.
+
+### 7.6 Broader validation and safer interpretation
+
+The upgrade now tests the proposed method against a directly comparable
+structural baseline, two additional Python codebases, and an external label
+proxy. This exposed two limitations instead of hiding them: the commit-message
+heuristic is not reliable, and GA is not guaranteed to beat all-features on
+every bounded repository sample. Reporting these outcomes improves the
+scientific quality of the project because conclusions are tied to observed
+evidence rather than one favorable dataset.
+
+### 7.7 Container and language extensibility
+
+The project now has a Java collection entry point and a container path that
+records platform constraints. Java metrics are named as lexical proxies, so
+future Java experiments can be compared only after an explicit feature
+mapping. The container dependency flow avoids an unnecessary GPU/NCCL
+download and uses API packages compatible with Python 3.11.
 
 ### Presentation summary
 
@@ -219,7 +273,7 @@ fairer, and the complete workflow easier to reproduce. The main result also
 became more credible because it was re-evaluated with 20 trials rather than
 being based on a small five-trial sample.
 
-## 7. Verification performed
+## 8. Verification performed
 
 - Python AST validation passed for modified modules.
 - Reproducibility unit tests passed: 3 tests.
@@ -229,8 +283,10 @@ being based on a small five-trial sample.
 - All fresh JSON artifacts passed finite-value and metadata validation.
 - README CLI commands and the new `--seed`/`--n-trials` options were checked.
 - No manuscript `.tex` files were modified.
+- `docker compose config` passed; the AMD64 image build was attempted but
+  network loss interrupted dependency installation.
 
-## 8. Artifacts
+## 9. Artifacts
 
 Fresh FastAPI artifacts are stored in:
 
@@ -251,16 +307,19 @@ results/RUN_LOG.md
 results/NUMBERS_CHANGED.md
 results/SEED_VERIFICATION.md
 results/XGBOOST_TUNING.md
+results/NNCP_COMPARISON.md
+results/LABEL_VALIDATION.md
+results/MULTI_REPO_COMPARISON.md
+results/TIER3_STATUS.md
 ```
 
-## 9. Remaining work
+## 10. Remaining work and honest limitations
 
-Tier 2 has not been started. It remains available for future work and
-includes:
-
-- an NNCP-style numerical baseline;
-- issue-tracker label validation;
-- expansion to two additional Python repositories.
+Full Tier 3 research-scale execution still requires selecting and pinning a
+Java upstream repository, completing a full 8–10 repository cross-language
+study, authenticated full-history issue/PR relabelling, and a successful
+networked container build. Tooling and commands are implemented, but no
+unsupported numbers are claimed for those external-data runs.
 
 The current results should be used to update the manuscript only after the
 research team reviews the changed numerical findings in
