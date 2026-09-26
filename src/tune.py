@@ -27,11 +27,18 @@ import os
 # Removed unused `import numpy as np` and `import pandas as pd`.
 
 import optuna
+from src.reproducibility import (
+    DEFAULT_BASE_SEED,
+    append_run_log,
+    make_metadata,
+    seed_everything,
+    write_json,
+)
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 
-def _objective(trial, csv_file: str, log_transform: bool):
+def _objective(trial, csv_file: str, log_transform: bool, seed: int):
     """Optuna objective: returns 5-fold CV MSE for a given hyperparameter set."""
     from src.ann_model import train_and_evaluate_ann
 
@@ -60,6 +67,7 @@ def _objective(trial, csv_file: str, log_transform: bool):
         use_kfold     = True,
         n_folds       = 5,
         log_transform = log_transform,
+        split_seed    = seed,
         hyperparams   = hp,
     )
     return mse
@@ -68,6 +76,7 @@ def _objective(trial, csv_file: str, log_transform: bool):
 def run_tuning(
     csv_file: str,
     n_trials: int       = 50,
+    base_seed: int      = DEFAULT_BASE_SEED,
     log_transform: bool = True,
     output_path: str    = "data/results/best_hyperparams.json",
 ) -> dict:
@@ -76,17 +85,18 @@ def run_tuning(
 
     Returns best hyperparameter dict.
     """
+    seed_everything(base_seed)
     print(f"\n[TUNE] Optuna hyperparameter search — {n_trials} trials")
     print(f"  Dataset: {csv_file}")
     print(f"  Objective: minimise 5-fold CV MSE (all features)\n")
 
     study = optuna.create_study(
         direction = "minimize",
-        sampler   = optuna.samplers.TPESampler(seed=42),
+        sampler   = optuna.samplers.TPESampler(seed=base_seed),
         pruner    = optuna.pruners.MedianPruner(n_startup_trials=10),
     )
     study.optimize(
-        lambda trial: _objective(trial, csv_file, log_transform),
+        lambda trial: _objective(trial, csv_file, log_transform, base_seed),
         n_trials          = n_trials,
         show_progress_bar = True,
         catch             = (Exception,),
@@ -101,9 +111,22 @@ def run_tuning(
     print(f"  Best CV MSE: {best_mse:.4f}")
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    result = {**best, "best_cv_mse": float(best_mse)}
-    with open(output_path, "w") as f:
-        json.dump(result, f, indent=2)
+    result = {
+        **best,
+        "best_cv_mse": float(best_mse),
+        "n_trials": n_trials,
+        "base_seed": base_seed,
+        "metadata": make_metadata({
+            'dataset': csv_file, 'n_trials': n_trials, 'base_seed': base_seed,
+            'objective': '5-fold stratified CV MSE',
+        }),
+    }
+    write_json(output_path, result)
+    append_run_log(
+        'Task 1.3', 'src.tune.run_tuning',
+        {'dataset': csv_file, 'n_trials': n_trials, 'base_seed': base_seed},
+        output_path, 'ANN hyperparameters tuned with deterministic Optuna seed.',
+    )
     print(f"\n  Saved to: {output_path}")
     print("  ann_model.py will automatically load these on next run.\n")
 
@@ -114,6 +137,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Optuna ANN hyperparameter tuning")
     parser.add_argument("--csv",    type=str, default="data/flask_dataset_clean.csv")
     parser.add_argument("--trials", type=int, default=50)
+    parser.add_argument("--seed", type=int, default=DEFAULT_BASE_SEED)
     parser.add_argument("--no-log", action="store_true",
                         help="Disable log-transform (not recommended)")
     args = parser.parse_args()
@@ -121,5 +145,6 @@ if __name__ == "__main__":
     run_tuning(
         csv_file      = args.csv,
         n_trials      = args.trials,
+        base_seed     = args.seed,
         log_transform = not args.no_log,
     )

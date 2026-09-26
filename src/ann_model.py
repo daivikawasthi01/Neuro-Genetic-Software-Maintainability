@@ -41,7 +41,11 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split, StratifiedKFold
 import pandas as pd
 
-_HYPERPARAMS_PATH = "data/results/best_hyperparams.json"
+from src.reproducibility import seed_everything
+
+_HYPERPARAMS_PATH = os.environ.get(
+    "NEURO_HYPERPARAMS_PATH", "data/results/best_hyperparams.json"
+)
 
 
 def load_hyperparams() -> dict:
@@ -182,7 +186,8 @@ def _train_fold(
     lr: float = 0.001, hidden1: int = 64, hidden2: int = 32, hidden3: int = 16,
     dropout: float = 0.3, weight_decay: float = 1e-4, use_bn: bool = True,
     divergence_cap: float = None,
-) -> float:
+    return_metrics: bool = False,
+) -> float | dict:
     """
     Train on (X_train, y_train_transformed) and evaluate on (X_val, y_val_original).
     If log_transform=True, predictions are back-transformed with expm1 before MSE.
@@ -223,6 +228,8 @@ def _train_fold(
     )
 
     best_mse      = float('inf')
+    best_preds    = None
+    best_targets  = None
     epochs_no_imp = 0
 
     for _ in range(epochs):
@@ -237,18 +244,24 @@ def _train_fold(
 
         model.eval()
         val_loss = 0.0
+        epoch_preds = []
+        epoch_targets = []
         with torch.no_grad():
             for bX, by in val_loader:
                 raw_preds = model(bX)
                 if log_transform:
                     raw_preds = torch.expm1(raw_preds.clamp(min=0))
                 val_loss += criterion(raw_preds, by).item()
+                epoch_preds.extend(raw_preds.detach().cpu().numpy().ravel().tolist())
+                epoch_targets.extend(by.detach().cpu().numpy().ravel().tolist())
 
         epoch_mse = val_loss / len(val_loader)
         scheduler.step(epoch_mse)
 
         if epoch_mse < best_mse:
             best_mse      = epoch_mse
+            best_preds    = np.asarray(epoch_preds, dtype=float)
+            best_targets  = np.asarray(epoch_targets, dtype=float)
             epochs_no_imp = 0
         else:
             epochs_no_imp += 1
@@ -257,8 +270,20 @@ def _train_fold(
 
     # Guard: if ANN diverged (NaN or above the adaptive cap), return the cap.
     if best_mse != best_mse or best_mse > divergence_cap:
-        return divergence_cap
-    return best_mse
+        best_mse = divergence_cap
+
+    if not return_metrics:
+        return best_mse
+
+    from sklearn.metrics import mean_absolute_error, r2_score
+    if best_preds is None or best_targets is None:
+        best_preds = np.full(len(y_val_original), float(np.mean(y_val_original)))
+        best_targets = np.asarray(y_val_original, dtype=float)
+    return {
+        "mse": float(best_mse),
+        "mae": float(mean_absolute_error(best_targets, best_preds)),
+        "r2": float(r2_score(best_targets, best_preds)) if len(best_targets) > 1 else 0.0,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -276,7 +301,8 @@ def train_and_evaluate_ann(
     n_folds: int      = 5,
     log_transform: bool = True,
     hyperparams: dict = None,
-) -> float:
+    return_metrics: bool = False,
+) -> float | dict:
     """
     Returns validation MSE (on original bug-count scale).
 
@@ -285,6 +311,7 @@ def train_and_evaluate_ann(
     log_transform    — train on log1p(y), evaluate on expm1(pred) vs y
     hyperparams      — if None, loads from best_hyperparams.json (written by tune.py)
     """
+    seed_everything(split_seed)
     hp = load_hyperparams()
     if hyperparams:
         hp.update(hyperparams)
@@ -317,9 +344,10 @@ def train_and_evaluate_ann(
 
         skf       = StratifiedKFold(n_splits=n_folds_safe, shuffle=True,
                                     random_state=split_seed)
-        fold_mses = []
+        fold_results = []
 
-        for train_idx, val_idx in skf.split(X_all, y_bins):
+        for fold_index, (train_idx, val_idx) in enumerate(skf.split(X_all, y_bins)):
+            seed_everything(split_seed + fold_index)
             X_tr, X_va = X_all[train_idx], X_all[val_idx]
             y_tr_m     = y_model[train_idx]
             y_va_orig  = y_all[val_idx]
@@ -328,15 +356,21 @@ def train_and_evaluate_ann(
             X_tr   = scaler.fit_transform(X_tr)
             X_va   = scaler.transform(X_va)
 
-            fold_mses.append(_train_fold(
+            fold_results.append(_train_fold(
                 X_tr, y_tr_m, X_va, y_va_orig,
                 epochs, batch_size, patience, log_transform,
                 lr=hp['lr'], hidden1=hp['hidden1'], hidden2=hp['hidden2'],
                 hidden3=hp.get('hidden3', 16), dropout=hp['dropout'],
                 weight_decay=hp['weight_decay'], use_bn=hp.get('use_bn', True),
+                return_metrics=return_metrics,
             ))
 
-        return float(np.mean(fold_mses))
+        if return_metrics:
+            return {
+                key: float(np.mean([result[key] for result in fold_results]))
+                for key in ("mse", "mae", "r2")
+            }
+        return float(np.mean(fold_results))
 
     else:
         idx = np.arange(len(X_all))
@@ -356,6 +390,7 @@ def train_and_evaluate_ann(
             lr=hp['lr'], hidden1=hp['hidden1'], hidden2=hp['hidden2'],
             hidden3=hp.get('hidden3', 16), dropout=hp['dropout'],
             weight_decay=hp['weight_decay'], use_bn=hp.get('use_bn', True),
+            return_metrics=return_metrics,
         )
 
 
