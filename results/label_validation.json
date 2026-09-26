@@ -1,0 +1,373 @@
+{
+  "metadata": {
+    "created_at_utc": "2026-09-26T11:42:43.038144+00:00",
+    "git_commit": "18ed00e23cd873fed47f9df5fe5a4d57781492ce",
+    "config": {
+      "repo_path": "test_repos/flask",
+      "github_repository": "pallets/flask",
+      "sample_size": 50,
+      "seed": 42,
+      "ground_truth": "GitHub pull-request labels containing a bug-like label"
+    }
+  },
+  "sample": [
+    {
+      "commit": "824c10c6e4d9c2235d41a2276a0158b1456c3b06",
+      "message": "Added MongoKit pattern and fixed typo in sqlalchemy pattern",
+      "keyword_heuristic": true,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "fdab801fbbd9de5adbdb3320ca4a1cb116c892f5",
+      "message": "add redirect method to app",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "ce08bc704e24c01582052f5c544fae181d08386f",
+      "message": "add SESSION_COOKIE_PARTITIONED config (#5499)",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "5beb3be536cc743962de6cd2bd95a6e036d11f52",
+      "message": "Bump version number to 0.12.4",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "00ca5b7328fbc5b11594ad448343ba371142c43a",
+      "message": "Merge pull request #3159 from abhinavsagar/updatedoc",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": "docs"
+    },
+    {
+      "commit": "2a8ebc4411deacb6eeac5d4cb6f9568d61ac6a12",
+      "message": "Fix github link generator for docs",
+      "keyword_heuristic": true,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "e4373eba1cdd4b288b9d37e784bd26e0ca32056c",
+      "message": "Merge pull request #4252 from pallets/dependabot/pip/cryptography-3.4.8",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": "dependencies"
+    },
+    {
+      "commit": "762382e436062183b1e1fa6f3bda594090a452e7",
+      "message": "view functions can return generators as responses directly",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "8e9bd5f009bb8756a2a7d76a4b792323eeee49d6",
+      "message": "Fixed a typo",
+      "keyword_heuristic": true,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "cb24646948a8c00c5b39f0d76bf75e153ac502b1",
+      "message": "Add jsonp support inside of jsonify",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "2c7877123880d44f5d964c7370ed5dd4dbc45ad2",
+      "message": "Fix missing assignment in MethodView example (#4815)",
+      "keyword_heuristic": true,
+      "github_bug_label": false,
+      "github_labels": "docs"
+    },
+    {
+      "commit": "3cecdb3966cbe3a40089fbb27d1445052d289aaf",
+      "message": "Merge pull request #259 from SimonSapin/docs-fix",
+      "keyword_heuristic": true,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "eca53063862fd487dbce6e36fc42fae80f1494c3",
+      "message": "Merge pull request #1262 from msabramo/JSONIFY_END_WITH_NEWLINE",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "0ce27278d234c13ce00019540ff8e9891542d1f2",
+      "message": "[pre-commit.ci] pre-commit autoupdate (#5495)",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "0f2ae2b9330604247f553f41d310e7c0191275ef",
+      "message": "add gha-update",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "30427a209043bfb9730904e0c34b0dbc40bd21f4",
+      "message": "remove FLASK_ENV from docs",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "413778afc19ce9f0cb484878d86375729c14faf4",
+      "message": "explain escape at top of quickstart",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": "docs"
+    },
+    {
+      "commit": "53c893b646252d610e877eb9385e9e250a1ae5e1",
+      "message": "fix string concats left over by black",
+      "keyword_heuristic": true,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "6caaa8a527134dc9aff6d5c442969e96f9c00f21",
+      "message": "automated change using python-modernize: use 'as' in except",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "d90765b0265eec81130172efe3250cd1e3c900bd",
+      "message": "Added testcase for json encoding parameter support",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "2778b7c23f37d4f3cfed4cadac4bc9c90e098c50",
+      "message": "Merge branch 'stable'",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "6d0b3264c2263e06eb0d5c854fd5782f04a34b24",
+      "message": "Mention localhost:5000 being pointless in the docs.  It already says that down on the page but not on the key",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "26ec470afbfb8b643f1d0ba3501b4def42b58911",
+      "message": "Fixed trailing whitespace",
+      "keyword_heuristic": true,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "133920c83bf78db17631b637b8b2ffabcb26f3d4",
+      "message": "Fix typo in docs.",
+      "keyword_heuristic": true,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "09370c3f1c808e9251292bc228b6bef4b1223e93",
+      "message": "Clean up docs and review pull request #384",
+      "keyword_heuristic": true,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "b9eb8051675da63750d2e89284e560b06f7c1820",
+      "message": "Update quickstart.rst",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "e17c3423bd306b04d27b6a2e53c80f1ac2179054",
+      "message": "Merge pull request #3375 from pallets/ext-py-version",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": "docs"
+    },
+    {
+      "commit": "777e23f81e5c496cd89d5789bdd18624e319a7ea",
+      "message": "Update mod_wsgi.rst",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "b64fa73467424b8e6c4efa565d4d5bc2ae414ab7",
+      "message": "HEAD is 0.8-dev",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "f7ac3a7620dfcccec98a6836bc43b1704f289ba2",
+      "message": "Merge branch '1.0-maintenance'",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "e82db2ca3a22c9614c1987392c9cfaa8c6ce99ad",
+      "message": "fix provide_automatic_options override",
+      "keyword_heuristic": true,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "fc82dd50e39700b14799df17578e2497b8f0248c",
+      "message": "Re-add filename param for send_from_directory",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "a5d24ac0d96a4e464d37c86267b4813c2f236ee8",
+      "message": "Remove head lines and add versions of first Python 3 support",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "7005c2d5343a4f8025b70e0a1eea9c01f1d229b0",
+      "message": "Merge pull request #2242 from davidism/utcfromtimestamp",
+      "keyword_heuristic": false,
+      "github_bug_label": true,
+      "github_labels": "bug,testing"
+    },
+    {
+      "commit": "ad1ce2721b4af0a48cfba6d5f22324d93d7db036",
+      "message": "Update config.rst",
+      "keyword_heuristic": true,
+      "github_bug_label": false,
+      "github_labels": "docs"
+    },
+    {
+      "commit": "1c3052377b18055cbfbbbdd297dd19a5c43c55a6",
+      "message": "Merge pull request #4063 from pgjones/bp-fix",
+      "keyword_heuristic": true,
+      "github_bug_label": false,
+      "github_labels": "blueprints"
+    },
+    {
+      "commit": "980168d08498c00a14ab0f687ffac8cc50edb326",
+      "message": "send_file doesn't allow StringIO",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "6032c94aeb090c82ac99b9f886341f61c73b65d0",
+      "message": "Mention existence of register_error_handler in errorpages.rst",
+      "keyword_heuristic": true,
+      "github_bug_label": false,
+      "github_labels": "docs"
+    },
+    {
+      "commit": "ab36542260c61f178b6e8f61312b706ac4c5f73e",
+      "message": "Merge pull request #4629 from pgjones/generate",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "b17bb9ed563ab2857c0db9a07ec4e6407404c7be",
+      "message": "Merge pull request #4710 from pallets/release-2.2.0",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "be2abd29267fdd337212b2d1a5856da635966005",
+      "message": "Fix typo (thing --> things)",
+      "keyword_heuristic": true,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "03b410066b96f63ba2a215750f881d5bebb78a29",
+      "message": "Fix docs/CHANGES.rst typo",
+      "keyword_heuristic": true,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "3d856e03fcfb20167f24fb5a849d075e3a83126a",
+      "message": "sessions documentation (client side vs server side) #434 (#1888)",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": "docs"
+    },
+    {
+      "commit": "19d7e6532f9187ba8a81b2d2ad9afe03e5e5500a",
+      "message": "Merge pull request #2217 from edbrannin/patch-1",
+      "keyword_heuristic": true,
+      "github_bug_label": false,
+      "github_labels": "cli"
+    },
+    {
+      "commit": "d8fcd4260e9194a03267ddb913a8b5d7cf0948d2",
+      "message": "Whitespace normalization",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "7d9dcfa2948b259a14b3fce4f5814236d5395095",
+      "message": "Merge pull request #2872 from cktan98/master",
+      "keyword_heuristic": true,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "78ced0093ade22a5de43ce3da98a4c2526022fbf",
+      "message": "Bump the github-actions group with 2 updates",
+      "keyword_heuristic": true,
+      "github_bug_label": false,
+      "github_labels": "dependencies,github_actions"
+    },
+    {
+      "commit": "00679eab93049728bba6ece883c01afbab0449ed",
+      "message": "Merge pull request #1022 from mjfroehlich/patch-1",
+      "keyword_heuristic": true,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "9d09632dbfc0c08ab1a5290fbf282aad7d13e2f8",
+      "message": "Fix spelling.",
+      "keyword_heuristic": true,
+      "github_bug_label": false,
+      "github_labels": ""
+    },
+    {
+      "commit": "528db86f8555a8404bf2db72fa4275449a3cd6b4",
+      "message": "Merge pull request #4442 from pallets/pre-commit-ci-update-config",
+      "keyword_heuristic": false,
+      "github_bug_label": false,
+      "github_labels": ""
+    }
+  ],
+  "blocked_commits": [],
+  "metrics": {
+    "n_evaluated": 50,
+    "precision": 0.0,
+    "recall": 0.0,
+    "cohen_kappa": -0.03960396039603942
+  },
+  "status": "complete"
+}
