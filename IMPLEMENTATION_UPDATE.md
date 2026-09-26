@@ -164,7 +164,62 @@ value, especially when combined with structural features.
 | Dataset revisions | Repository revisions were undocumented | Immutable repository commits recorded |
 | Backend startup | `uvicorn` could be missing from the active shell | Backend dependencies and virtual-environment execution fixed |
 
-## 6. Verification performed
+## 6. How the system was improved
+
+The system was improved in five main ways.
+
+### 6.1 More reliable experiments
+
+Previously, different experiment modules used different trial counts and
+different seed formulas. This made it difficult to determine whether a result
+was caused by the model or by a particular random split. The updated system
+uses one shared base seed, deterministic per-trial seeds, and a common
+five-fold cross-validation protocol. This makes comparisons between GA, ANN,
+random-subset, and XGBoost models fairer and repeatable.
+
+### 6.2 Stronger statistical evidence
+
+The previous main comparison used only five trials, which produced weak
+statistical power. The revised experiment uses 20 trials and stores every raw
+trial result. The Wilcoxon test is now explicitly paired and two-sided, and
+the exact test statistic, p-value, and Cohen’s d are recorded. This allows the
+reported conclusions to be independently checked instead of relying only on
+rounded averages.
+
+### 6.3 Better protection against stale or mixed results
+
+Earlier results could be confused with results from another repository or a
+previous configuration because outputs were stored in common filenames. The
+new implementation isolates results by dataset and seed, records the source
+Git commit, and uses experiment-specific GA checkpoints. This prevents stale
+GA cache entries or old hyperparameters from silently affecting a new run.
+
+### 6.4 Fairer model comparison
+
+The original pipeline compared the ANN against an untuned XGBoost model. That
+could make the tree-based baseline look worse simply because it had not been
+optimized. The revised system tunes XGBoost with a 50-trial Optuna search,
+while preserving the untuned result for transparency. The tuned model improved
+from MSE `0.297551` to `0.284552`, although it still did not outperform the
+ANN-based models.
+
+### 6.5 Easier reproduction and presentation
+
+The project now includes pinned repository revisions, pinned dependencies,
+dataset hashes, run logs, seed verification, and copy-pasteable commands.
+This makes it possible for another researcher to reproduce the experiment and
+trace each reported number back to a specific dataset, configuration, seed,
+and source artifact.
+
+### Presentation summary
+
+In simple terms, the system was improved by making the experiments more
+controlled, the comparisons more statistically valid, the model baselines
+fairer, and the complete workflow easier to reproduce. The main result also
+became more credible because it was re-evaluated with 20 trials rather than
+being based on a small five-trial sample.
+
+## 7. Verification performed
 
 - Python AST validation passed for modified modules.
 - Reproducibility unit tests passed: 3 tests.
@@ -175,7 +230,7 @@ value, especially when combined with structural features.
 - README CLI commands and the new `--seed`/`--n-trials` options were checked.
 - No manuscript `.tex` files were modified.
 
-## 7. Artifacts
+## 8. Artifacts
 
 Fresh FastAPI artifacts are stored in:
 
@@ -198,7 +253,7 @@ results/SEED_VERIFICATION.md
 results/XGBOOST_TUNING.md
 ```
 
-## 8. Remaining work
+## 9. Remaining work
 
 Tier 2 has not been started. It remains available for future work and
 includes:
