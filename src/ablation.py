@@ -23,6 +23,14 @@ import pandas as pd
 
 from src.ann_model import train_and_evaluate_ann
 from src.constants import CATEGORY_A_STRUCTURAL, CATEGORY_B_TEXTUAL, CATEGORY_C_EVOLUTIONARY
+from src.reproducibility import (
+    DEFAULT_BASE_SEED,
+    append_run_log,
+    make_metadata,
+    seed_everything,
+    trial_seed,
+    write_json,
+)
 
 
 ABLATION_COMBOS = {
@@ -52,7 +60,8 @@ def _build_mask_for_combo(feature_names: list, categories: list) -> list:
 
 def run_ablation(
     csv_file: str,
-    n_trials: int       = 5,
+    n_trials: int       = 20,
+    base_seed: int      = DEFAULT_BASE_SEED,
     log_transform: bool = True,
     output_path: str    = "data/results/ablation_results.json",
 ) -> dict:
@@ -68,6 +77,7 @@ def run_ablation(
 
     print(f"\n[ABLATION] {len(ABLATION_COMBOS)} combinations x {n_trials} trials each")
 
+    seed_everything(base_seed)
     results = {}
 
     for combo_name, categories in ABLATION_COMBOS.items():
@@ -87,16 +97,18 @@ def run_ablation(
 
         combo_mses = []
         for trial in range(n_trials):
-            seed = trial * 11 + 7
+            seed = trial_seed(base_seed, trial)
+            seed_everything(seed)
             mse  = train_and_evaluate_ann(
                 csv_file,
                 feature_mask  = mask,
-                use_kfold     = False,
+                use_kfold     = True,
                 split_seed    = seed,
                 log_transform = log_transform,
+                return_metrics = True,
             )
-            combo_mses.append(mse)
-            print(f"    trial {trial+1:02d}/{n_trials}  MSE: {mse:.4f}")
+            combo_mses.append(mse['mse'])
+            print(f"    trial {trial+1:02d}/{n_trials}  MSE: {mse['mse']:.4f}")
 
         results[combo_name] = {
             'categories': categories,
@@ -104,11 +116,22 @@ def run_ablation(
             'mses':       combo_mses,
             'mean':       float(np.mean(combo_mses)),
             'std':        float(np.std(combo_mses)),
+            'trial_seeds': [trial_seed(base_seed, i) for i in range(n_trials)],
         }
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, 'w') as f:
-        json.dump(results, f, indent=2)
+    payload = {
+        'metadata': make_metadata({
+            'dataset': csv_file, 'n_trials': n_trials, 'base_seed': base_seed,
+            'protocol': '5-fold stratified CV',
+        }),
+        'results': results,
+    }
+    write_json(output_path, payload)
+    append_run_log(
+        'Task 1.1/1.2', 'src.ablation.run_ablation',
+        {'dataset': csv_file, 'n_trials': n_trials, 'base_seed': base_seed},
+        output_path, 'Ablation combinations evaluated with unified trial seeds.',
+    )
 
     _print_summary(results)
     print(f"\n  Saved to: {output_path}")

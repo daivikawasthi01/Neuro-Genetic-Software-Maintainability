@@ -20,6 +20,7 @@ import os
 import random
 import pandas as pd
 from src.ann_model import train_and_evaluate_ann
+from src.reproducibility import DEFAULT_BASE_SEED, make_metadata, seed_everything
 
 
 class FeatureSelectionGA:
@@ -37,6 +38,8 @@ class FeatureSelectionGA:
         checkpoint_path: str     = "data/results/ga_checkpoint.json",
         n_epochs: int            = 100,   # ANN epochs per fitness evaluation
         use_kfold: bool          = True,  # k-fold for reliable MSE during evolution
+        base_seed: int            = DEFAULT_BASE_SEED,
+        results_path: str         = "data/results/ga_results.json",
     ):
         self.csv_file          = csv_file
         self.population_size   = population_size
@@ -50,10 +53,14 @@ class FeatureSelectionGA:
         self.checkpoint_path   = checkpoint_path
         self.n_epochs          = n_epochs
         self.use_kfold         = use_kfold
+        self.base_seed         = base_seed
+        self.results_path      = results_path
 
         df = pd.read_csv(csv_file)
-        self.num_features  = len(df.columns) - 2
-        self.feature_names = df.columns[1:-1].tolist()
+        feature_cols = [c for c in df.select_dtypes(include='number').columns
+                        if c != 'target_bug_proneness']
+        self.num_features  = len(feature_cols)
+        self.feature_names = feature_cols
 
         self.evaluation_cache: dict = {}
         self.history: list          = []
@@ -207,8 +214,10 @@ class FeatureSelectionGA:
         print(f" Mutation   : {self.mutation_rate:.2f} → {self.min_mutation_rate:.2f} (adaptive)")
         print(f" Alpha: {self.alpha}  Beta: {self.beta}  Stagnation: {self.stagnation_limit}")
         print(f" ANN epochs : {self.n_epochs} | K-fold: {self.use_kfold}")
+        print(f" Base seed  : {self.base_seed}")
         print("=" * 60 + "\n")
 
+        seed_everything(self.base_seed)
         self.history      = []
         population        = [self.generate_random_chromosome()
                              for _ in range(self.population_size)]
@@ -235,7 +244,9 @@ class FeatureSelectionGA:
             scored = []
             for i, chrom in enumerate(population):
                 cached       = (chrom, gen) in self.evaluation_cache
-                fitness, mse = self.calculate_fitness(chrom, split_seed=gen)
+                fitness, mse = self.calculate_fitness(
+                    chrom, split_seed=self.base_seed + gen
+                )
                 scored.append((chrom, fitness, mse))
                 label = "(cached)" if cached else ""
                 print(f"  [{i+1:02d}] feats: {sum(chrom):02d}/{self.num_features}"
@@ -283,7 +294,7 @@ class FeatureSelectionGA:
                     'complete':      False,
                 }
                 try:
-                    with open("data/results/ga_results.json", 'w') as _f:
+                    with open(self.results_path, 'w') as _f:
                         import json as _json
                         _json.dump(_interim, _f, indent=2)
                 except Exception:
@@ -333,6 +344,17 @@ class FeatureSelectionGA:
             'history':       self.history,
             'cache_size':    len(self.evaluation_cache),
             'complete':      True,
+            'base_seed':     self.base_seed,
+            'metadata':      make_metadata({
+                'dataset': self.csv_file,
+                'population_size': self.population_size,
+                'generations': self.generations,
+                'alpha': self.alpha,
+                'beta': self.beta,
+                'base_seed': self.base_seed,
+                'use_kfold': self.use_kfold,
+                'n_epochs': self.n_epochs,
+            }),
         }
         return result
 

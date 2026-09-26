@@ -15,12 +15,21 @@ import json
 import os
 import numpy as np
 from scipy.stats import wilcoxon
+from src.reproducibility import (
+    DEFAULT_BASE_SEED,
+    append_run_log,
+    make_metadata,
+    seed_everything,
+    trial_seed,
+    write_json,
+)
 
 
 def run_significance_tests(
     csv_file: str,
     ga_chromosome: tuple,
-    n_trials: int       = 30,
+    n_trials: int       = 20,
+    base_seed: int      = DEFAULT_BASE_SEED,
     log_transform: bool = True,
     output_path: str    = 'data/results/stats_results.json',
 ) -> dict:
@@ -41,11 +50,13 @@ def run_significance_tests(
     print(f"  GA chromosome: {sum(ga_chromosome)}/{len(ga_chromosome)} features")
     print(f"  Settings: use_kfold=True, epochs=100, divergence_cap=2.0\n")
 
+    seed_everything(base_seed)
     ga_mses  = []
     all_mses = []
 
     for trial in range(1, n_trials + 1):
-        seed = trial * 7  # deterministic but varied seeds
+        seed = trial_seed(base_seed, trial - 1)
+        seed_everything(seed)
 
         ga_mse = train_and_evaluate_ann(
             csv_file,
@@ -92,7 +103,12 @@ def run_significance_tests(
     if np.all(differences == 0):
         stat, p_value = 0.0, 1.0
     else:
-        stat, p_value = wilcoxon(differences)
+        stat, p_value = wilcoxon(
+            differences,
+            alternative='two-sided',
+            zero_method='wilcox',
+            method='auto',
+        )
 
     # Cohen's d effect size on paired differences
     diff_mean = float(differences.mean())
@@ -136,14 +152,28 @@ def run_significance_tests(
         'significant':       significant,
         'pct_improvement':   improvement_pct,
         'n_trials':          n_trials,
+        'base_seed':         base_seed,
+        'trial_seeds':       [trial_seed(base_seed, i) for i in range(n_trials)],
+        'test': {
+            'name': 'Wilcoxon signed-rank',
+            'paired': True,
+            'alternative': 'two-sided',
+            'zero_method': 'wilcox',
+        },
         'ga_mses':           [float(v) for v in ga_mses],
         'all_mses':          [float(v) for v in all_mses],
+        'metadata': make_metadata({
+            'dataset': csv_file, 'n_trials': n_trials, 'base_seed': base_seed,
+            'ga_chromosome': list(ga_chromosome), 'protocol': '5-fold stratified CV',
+        }),
     }
 
-    out_dir = os.path.dirname(output_path) or '.'
-    os.makedirs(out_dir, exist_ok=True)
-    with open(output_path, 'w') as f:
-        json.dump(results, f, indent=2)
+    write_json(output_path, results)
+    append_run_log(
+        'Task 1.2', 'src.stats.run_significance_tests',
+        {'dataset': csv_file, 'n_trials': n_trials, 'base_seed': base_seed},
+        output_path, 'Paired two-sided Wilcoxon and paired Cohen effect size recorded.',
+    )
     print(f"  Saved to: {output_path}")
     return results
 

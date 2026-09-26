@@ -27,6 +27,7 @@ import time
 
 # Ensure src/ is importable regardless of CWD
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from src.reproducibility import DEFAULT_BASE_SEED, append_run_log
 
 RESULTS_DIR = "data/results"
 
@@ -71,11 +72,13 @@ def stage_preprocess(raw_file, processed_file, force):
 
 def stage_tune(processed_file, tune_trials, force):
     _banner("STAGE 3 — Hyperparameter Tuning")
-    hp_path = os.path.join(RESULTS_DIR, "best_hyperparams.json")
+    dataset_stem = os.path.splitext(os.path.basename(processed_file))[0]
+    hp_path = os.path.join("data/results", f"{dataset_stem}_best_hyperparams.json")
+    os.environ["NEURO_HYPERPARAMS_PATH"] = hp_path
     if not force and _skip(hp_path, "Hyperparameter tuning"):
         return
     from src.tune import run_tuning
-    run_tuning(processed_file, n_trials=tune_trials)
+    run_tuning(processed_file, n_trials=tune_trials, output_path=hp_path)
 
 
 def stage_ga(processed_file, args, force):
@@ -85,6 +88,12 @@ def stage_ga(processed_file, args, force):
         return
     t0 = time.time()
     from src.genetic_algorithm import FeatureSelectionGA
+    checkpoint_path = os.path.join(
+        RESULTS_DIR,
+        f"ga_checkpoint_seed{args.seed}_{os.path.basename(processed_file)}.json",
+    )
+    if force and os.path.exists(checkpoint_path):
+        os.remove(checkpoint_path)
     ga = FeatureSelectionGA(
         csv_file          = processed_file,
         population_size   = args.pop_size,
@@ -94,6 +103,9 @@ def stage_ga(processed_file, args, force):
         alpha             = args.alpha,
         beta              = args.beta,
         stagnation_limit  = args.stagnation,
+        base_seed         = args.seed,
+        checkpoint_path   = checkpoint_path,
+        results_path      = ga_path,
     )
     result = ga.evolve()
     # Persist final result with elapsed time
@@ -102,6 +114,12 @@ def stage_ga(processed_file, args, force):
     result['complete']  = True
     with open(ga_path, 'w') as f:
         json.dump(result, f, indent=2)
+    append_run_log(
+        'Task 1.1/1.3', 'src.genetic_algorithm.FeatureSelectionGA.evolve',
+        {'dataset': processed_file, 'base_seed': args.seed,
+         'population_size': args.pop_size, 'generations': args.generations},
+        ga_path, 'GA feature selection completed with isolated checkpoint/cache.',
+    )
     print(f"\n  GA complete — best MSE: {result['best_mse']:.4f} | "
           f"features: {result['n_selected']}/{result['n_total']}")
     return result
@@ -116,33 +134,44 @@ def _load_ga_chromosome():
         return tuple(json.load(f)['chromosome'])
 
 
-def stage_baselines(processed_file, n_trials, force):
+def stage_baselines(processed_file, n_trials, seed, force):
     _banner("STAGE 5 — Baseline Comparison")
     bl_path = os.path.join(RESULTS_DIR, "baseline_results.json")
     if not force and _skip(bl_path, "Baselines"):
         return
     chromosome = _load_ga_chromosome()
     from src.baseline import run_baselines
-    run_baselines(processed_file, ga_chromosome=chromosome, n_trials=n_trials)
+    run_baselines(
+        processed_file, ga_chromosome=chromosome,
+        n_trials=n_trials, base_seed=seed,
+        output_path=os.path.join(RESULTS_DIR, "baseline_results.json"),
+    )
 
 
-def stage_ablation(processed_file, n_trials, force):
+def stage_ablation(processed_file, n_trials, seed, force):
     _banner("STAGE 6 — Ablation Study")
     abl_path = os.path.join(RESULTS_DIR, "ablation_results.json")
     if not force and _skip(abl_path, "Ablation"):
         return
     from src.ablation import run_ablation
-    run_ablation(processed_file, n_trials=n_trials)
+    run_ablation(
+        processed_file, n_trials=n_trials, base_seed=seed,
+        output_path=os.path.join(RESULTS_DIR, "ablation_results.json"),
+    )
 
 
-def stage_stats(processed_file, n_trials, force):
+def stage_stats(processed_file, n_trials, seed, force):
     _banner("STAGE 7 — Statistical Significance")
     stats_path = os.path.join(RESULTS_DIR, "stats_results.json")
     if not force and _skip(stats_path, "Stats"):
         return
     chromosome = _load_ga_chromosome()
     from src.stats import run_significance_tests
-    run_significance_tests(processed_file, ga_chromosome=chromosome, n_trials=n_trials)
+    run_significance_tests(
+        processed_file, ga_chromosome=chromosome,
+        n_trials=n_trials, base_seed=seed,
+        output_path=os.path.join(RESULTS_DIR, "stats_results.json"),
+    )
 
 
 def stage_multi_repo(repo_names, ga_kwargs, run_baselines_flag, force):
@@ -201,6 +230,7 @@ def parse_args():
 
     # Research modules
     p.add_argument("--n-trials",        type=int,   default=20)
+    p.add_argument("--seed",            type=int,   default=DEFAULT_BASE_SEED)
     p.add_argument("--tune-trials",     type=int,   default=50)
     p.add_argument("--run-tuning",      action="store_true")
     p.add_argument("--run-baselines",   action="store_true")
@@ -226,7 +256,14 @@ def parse_args():
 
 
 def main():
+    global RESULTS_DIR
     args = parse_args()
+
+    dataset_stem = os.path.splitext(os.path.basename(args.processed_file))[0]
+    RESULTS_DIR = os.path.join("data/results", dataset_stem)
+    os.environ["NEURO_HYPERPARAMS_PATH"] = os.path.join(
+        "data/results", f"{dataset_stem}_best_hyperparams.json"
+    )
 
     force_all = args.force_all
 
@@ -274,15 +311,15 @@ def main():
 
     # Stage 5: baselines
     if args.run_baselines:
-        stage_baselines(args.processed_file, args.n_trials, force=force_all)
+        stage_baselines(args.processed_file, args.n_trials, args.seed, force=force_all)
 
     # Stage 6: ablation
     if args.run_ablation:
-        stage_ablation(args.processed_file, args.n_trials, force=force_all)
+        stage_ablation(args.processed_file, args.n_trials, args.seed, force=force_all)
 
     # Stage 7: stats
     if args.run_stats:
-        stage_stats(args.processed_file, args.n_trials, force=force_all)
+        stage_stats(args.processed_file, args.n_trials, args.seed, force=force_all)
 
     # Stage 8: multi-repo
     if args.multi_repo:
@@ -294,6 +331,7 @@ def main():
             alpha             = args.alpha,
             beta              = args.beta,
             stagnation_limit  = args.stagnation,
+            base_seed         = args.seed,
         )
         stage_multi_repo(args.repos, ga_kwargs,
                          run_baselines_flag=args.run_baselines,
