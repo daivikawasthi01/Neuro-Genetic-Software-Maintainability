@@ -1,13 +1,138 @@
 import os
 import ast
+import json
 import subprocess
 from collections import Counter
+from dataclasses import dataclass
+from pathlib import Path
 from radon.complexity import cc_visit
 from radon.metrics import h_visit
 import git
 import pandas as pd
 from datetime import datetime, timezone
 from dateutil.relativedelta import relativedelta
+
+
+BUG_KEYWORDS = ('fix', 'bug', 'patch', 'issue', 'resolve', 'error')
+
+
+@dataclass(frozen=True)
+class HistoryRecord:
+    sha: str
+    committed_at: datetime
+    author_email: str
+    message: str
+    insertions: int
+    deletions: int
+
+
+class RepositoryHistoryIndex:
+    """One-pass Git history index shared by every file in a mining run.
+
+    The previous implementation called ``repo.iter_commits(paths=...)`` and
+    then launched ``git log --numstat`` once per file. This index performs one
+    repository-wide walk and groups the resulting records by path, avoiding
+    thousands of repeated object-database traversals and subprocesses.
+    """
+
+    def __init__(self, repo_path: str):
+        self.repo_path = repo_path
+        self.repo = git.Repo(repo_path)
+        self.source_commit = self.repo.head.commit.hexsha
+        self.by_path: dict[str, list[HistoryRecord]] = {}
+        self._build()
+
+    @staticmethod
+    def _parse_int(value: str) -> int:
+        try:
+            return int(value) if value != '-' else 0
+        except ValueError:
+            return 0
+
+    def _build(self) -> None:
+        command = [
+            'git', 'log', self.source_commit, '--no-renames', '--numstat',
+            '--date=iso-strict',
+            '--format=__COMMIT__%H%x09%aI%x09%ae%x09%s', '--', '.',
+        ]
+        result = subprocess.run(
+            command, cwd=self.repo_path, capture_output=True, text=True,
+            check=True,
+        )
+        current = None
+        for line in result.stdout.splitlines():
+            if line.startswith('__COMMIT__'):
+                fields = line[len('__COMMIT__'):].split('\t', 3)
+                if len(fields) == 4:
+                    current = {
+                        'sha': fields[0],
+                        'committed_at': datetime.fromisoformat(fields[1]).astimezone(timezone.utc),
+                        'author_email': fields[2],
+                        'message': fields[3],
+                    }
+                continue
+            if current is None:
+                continue
+            fields = line.split('\t', 2)
+            if len(fields) != 3:
+                continue
+            insertions, deletions, path = fields
+            record = HistoryRecord(
+                sha=current['sha'],
+                committed_at=current['committed_at'],
+                author_email=current['author_email'],
+                message=current['message'],
+                insertions=self._parse_int(insertions),
+                deletions=self._parse_int(deletions),
+            )
+            self.by_path.setdefault(path, []).append(record)
+
+        for path in self.by_path:
+            self.by_path[path].sort(key=lambda record: record.committed_at, reverse=True)
+
+    def records_for(self, file_rel_path: str) -> list[HistoryRecord]:
+        return self.by_path.get(file_rel_path, [])
+
+    def historical_code(self, record: HistoryRecord, file_rel_path: str) -> str | None:
+        try:
+            blob = self.repo.commit(record.sha).tree[file_rel_path]
+            return blob.data_stream.read().decode('utf-8', errors='replace')
+        except (KeyError, AttributeError, git.exc.BadName):
+            return None
+
+
+class MiningCache:
+    """Metadata-validated JSON cache for resumable feature extraction."""
+
+    def __init__(self, path: str | None, metadata: dict):
+        self.path = Path(path) if path else None
+        self.metadata = metadata
+        self.entries: dict[str, dict] = {}
+        if self.path and self.path.exists():
+            try:
+                payload = json.loads(self.path.read_text())
+                if payload.get('metadata') == metadata:
+                    self.entries = payload.get('entries', {})
+            except (OSError, json.JSONDecodeError):
+                self.entries = {}
+
+    def get(self, file_rel_path: str) -> dict | None:
+        entry = self.entries.get(file_rel_path)
+        return entry.get('features') if entry else None
+
+    def put(self, file_rel_path: str, features: dict) -> None:
+        self.entries[file_rel_path] = {'features': features}
+
+    def save(self) -> None:
+        if not self.path:
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.path.with_suffix(self.path.suffix + '.tmp')
+        temporary.write_text(json.dumps({
+            'metadata': self.metadata,
+            'entries': self.entries,
+        }, indent=2, sort_keys=True) + '\n')
+        temporary.replace(self.path)
 
 
 def collect_structural_metrics(code):
@@ -185,7 +310,9 @@ def _get_churn_stats(repo_path: str, file_rel_path: str,
 
 
 def collect_evolutionary_metrics_and_target(
-        repo_path, file_rel_path, timeframe_months=12):
+        repo_path, file_rel_path, timeframe_months=12,
+        history_index: RepositoryHistoryIndex | None = None,
+        snapshot_date: datetime | None = None):
     """
     Extract Category C metrics and target ground truth (bug-proneness score).
 
@@ -209,25 +336,24 @@ def collect_evolutionary_metrics_and_target(
         so the file is not silently dropped from the dataset.
     """
     try:
-        repo = git.Repo(repo_path)
-    except git.exc.InvalidGitRepositoryError:
+        index = history_index or RepositoryHistoryIndex(repo_path)
+    except (git.exc.InvalidGitRepositoryError, subprocess.CalledProcessError):
         print(f"Not a valid git repository: {repo_path}")
         return {}, None
 
-    # Full commit history — no cap (max_count=100 was a cloud workaround)
-    commits_touching_file = list(repo.iter_commits(paths=file_rel_path))
+    commits_touching_file = index.records_for(file_rel_path)
 
     if not commits_touching_file:
         return {}, None
 
-    now           = datetime.now(timezone.utc)
-    snapshot_date = now - relativedelta(months=timeframe_months)
+    if snapshot_date is None:
+        snapshot_date = datetime.now(timezone.utc) - relativedelta(months=timeframe_months)
 
     past_commits   = []
     future_commits = []
 
     for c in commits_touching_file:
-        commit_date = c.committed_datetime.astimezone(timezone.utc)
+        commit_date = c.committed_at
         if commit_date <= snapshot_date:
             past_commits.append(c)
         else:
@@ -243,10 +369,10 @@ def collect_evolutionary_metrics_and_target(
 
     past_authors   = set()
     past_bug_fixes = 0
-    bug_keywords   = ['fix', 'bug', 'patch', 'issue', 'resolve', 'error']
+    bug_keywords   = BUG_KEYWORDS
 
     for commit in past_commits:
-        past_authors.add(commit.author.email)
+        past_authors.add(commit.author_email)
         if any(kw in commit.message.lower() for kw in bug_keywords):
             past_bug_fixes += 1
 
@@ -258,15 +384,14 @@ def collect_evolutionary_metrics_and_target(
     try:
         code_age_days = (
             snapshot_date
-            - past_commits[-1].committed_datetime.astimezone(timezone.utc)
+            - past_commits[-1].committed_at
         ).days
     except IndexError:
         code_age_days = 0
 
-    # Churn stats — single git log --numstat call, fast on any backend
-    insertions, deletions = _get_churn_stats(
-        repo_path, file_rel_path, snapshot_date
-    )
+    # Churn is already available from the one-pass repository history index.
+    insertions = sum(record.insertions for record in past_commits)
+    deletions = sum(record.deletions for record in past_commits)
     code_churn          = insertions + deletions
     added_deleted_ratio = insertions / max(1, deletions)
 
@@ -283,26 +408,18 @@ def collect_evolutionary_metrics_and_target(
     # Retrieve file content at snapshot date
     historical_code  = None
     last_past_commit = past_commits[0]
-
-    try:
-        blob            = last_past_commit.tree[file_rel_path]
-        historical_code = blob.data_stream.read().decode('utf-8', errors='replace')
-    except (KeyError, AttributeError):
-        try:
-            obj = last_past_commit.tree
-            for part in file_rel_path.split('/'):
-                obj = obj[part]
-            historical_code = obj.data_stream.read().decode('utf-8', errors='replace')
-        except Exception:
-            historical_code = None
+    historical_code = index.historical_code(last_past_commit, file_rel_path)
 
     return metrics, historical_code
 
 
 def extract_all_metrics_for_file(repo_path, file_rel_path,
-                                 timeframe_months=12):
+                                 timeframe_months=12,
+                                 history_index: RepositoryHistoryIndex | None = None,
+                                 snapshot_date: datetime | None = None):
     evolutionary_metrics, historical_code = collect_evolutionary_metrics_and_target(
-        repo_path, file_rel_path, timeframe_months=timeframe_months
+        repo_path, file_rel_path, timeframe_months=timeframe_months,
+        history_index=history_index, snapshot_date=snapshot_date,
     )
 
     if historical_code is None:
@@ -315,7 +432,8 @@ def extract_all_metrics_for_file(repo_path, file_rel_path,
 
 
 def build_dataset_from_repo(repo_path, output_csv_path,
-                             timeframe_months=12, max_files=None):
+                             timeframe_months=12, max_files=None,
+                             as_of_date=None, cache_path=None):
     """
     Mine all Python files in repo_path and write a CSV to output_csv_path.
 
@@ -326,10 +444,26 @@ def build_dataset_from_repo(repo_path, output_csv_path,
         Optional deterministic cap applied after sorting relative paths. This
         is useful for bounded large-repository experiments and is recorded by
         the caller in the experiment configuration.
+    as_of_date (default None):
+        UTC boundary in ISO format. If omitted, the current UTC time is used
+        and recorded so a later run can pin the same boundary.
+    cache_path (default derived from output_csv_path):
+        Metadata-validated resumable feature cache. A cache is ignored when
+        its source commit or mining configuration differs.
     """
     print(f"\nScanning repository: {repo_path}")
     print(f"Snapshot window: {timeframe_months} months back")
     dataset = []
+
+    history_index = RepositoryHistoryIndex(repo_path)
+    if as_of_date:
+        snapshot_boundary = datetime.fromisoformat(as_of_date)
+        if snapshot_boundary.tzinfo is None:
+            snapshot_boundary = snapshot_boundary.replace(tzinfo=timezone.utc)
+        snapshot_boundary = snapshot_boundary.astimezone(timezone.utc)
+    else:
+        snapshot_boundary = datetime.now(timezone.utc)
+    snapshot_date = snapshot_boundary - relativedelta(months=timeframe_months)
 
     py_files = []
     for root, _, files in os.walk(repo_path):
@@ -342,6 +476,19 @@ def build_dataset_from_repo(repo_path, output_csv_path,
     py_files.sort(key=lambda path: os.path.relpath(path, repo_path).replace('\\', '/'))
     if max_files is not None:
         py_files = py_files[:max_files]
+    selected_file_count = len(py_files)
+    cache = MiningCache(
+        cache_path or f"{output_csv_path}.mining-cache.json",
+        {
+            'schema_version': 2,
+            'source_commit': history_index.source_commit,
+            'timeframe_months': timeframe_months,
+            'snapshot_boundary': snapshot_boundary.isoformat(),
+            'snapshot_date': snapshot_date.isoformat(),
+            'selected_file_count': selected_file_count,
+        },
+    )
+    cache_hits = 0
     print(f"Found {len(py_files)} Python files. Mining (this takes a while "
           f"on large repos)...")
 
@@ -351,14 +498,25 @@ def build_dataset_from_repo(repo_path, output_csv_path,
         if i % 50 == 0 or i == len(py_files):
             print(f"  [{i:4d}/{len(py_files)}] {file_rel_path}")
 
-        features = extract_all_metrics_for_file(
-            repo_path, file_rel_path,
-            timeframe_months=timeframe_months
-        )
+        features = cache.get(file_rel_path)
+        if features is not None:
+            cache_hits += 1
+        else:
+            features = extract_all_metrics_for_file(
+                repo_path, file_rel_path,
+                timeframe_months=timeframe_months,
+                history_index=history_index,
+                snapshot_date=snapshot_date,
+            )
+            if features:
+                cache.put(file_rel_path, features)
 
         if features:
             features['file_name'] = file_rel_path
             dataset.append(features)
+
+        if i % 25 == 0:
+            cache.save()
 
     df = pd.DataFrame(dataset)
 
@@ -374,17 +532,34 @@ def build_dataset_from_repo(repo_path, output_csv_path,
 
     os.makedirs(os.path.dirname(output_csv_path) or '.', exist_ok=True)
     df.to_csv(output_csv_path, index=False)
+    cache.save()
 
     bug_prone = (df['target_bug_proneness'] > 0).sum()
     print(f"\nDataset saved: {len(df)} files | "
           f"{bug_prone} bug-prone ({bug_prone/len(df)*100:.1f}%) | "
           f"→ {output_csv_path}")
+    print(f"Mining history index: {len(history_index.by_path)} files | "
+          f"cache hits: {cache_hits}/{len(py_files)} | "
+          f"source commit: {history_index.source_commit[:12]}")
     return df
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Mine repository features')
+    parser.add_argument('--repo', default='test_repos/flask')
+    parser.add_argument('--output', default='data/flask_dataset.csv')
+    parser.add_argument('--timeframe-months', type=int, default=12)
+    parser.add_argument('--max-files', type=int, default=None)
+    parser.add_argument('--as-of', default=None,
+                        help='UTC ISO timestamp used as the snapshot boundary')
+    parser.add_argument('--cache', default=None)
+    args = parser.parse_args()
     build_dataset_from_repo(
-        "test_repos/flask",
-        "data/flask_dataset.csv",
-        timeframe_months=12
+        args.repo, args.output,
+        timeframe_months=args.timeframe_months,
+        max_files=args.max_files,
+        as_of_date=args.as_of,
+        cache_path=args.cache,
     )

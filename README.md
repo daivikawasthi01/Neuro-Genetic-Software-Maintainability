@@ -256,6 +256,25 @@ Validate the commit-message bug heuristic against a seeded external signal:
 ./venv/bin/python scripts/validate_bug_labels.py --sample-size 50 --seed 42
 ```
 
+### Reproducible repository mining
+
+Mining now builds one shared Git history index and supports resumable,
+metadata-validated caches. Pin the snapshot boundary when generating a new
+dataset:
+
+```bash
+./venv/bin/python -m src.data_collector \
+  --repo test_repos/flask \
+  --output data/flask_dataset_mined.csv \
+  --timeframe-months 12 \
+  --as-of 2026-09-27T00:00:00+00:00 \
+  --cache data/flask_dataset_mined.csv.mining-cache.json
+```
+
+Use `--max-files N` for a deterministic bounded sample of sorted relative
+paths. The cache is automatically ignored when the source commit or mining
+configuration changes.
+
 ### Tier 3 utilities
 
 The language-extension collector supports bounded Java datasets and records
