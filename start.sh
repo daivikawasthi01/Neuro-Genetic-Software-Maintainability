@@ -13,10 +13,25 @@ export OMP_NUM_THREADS=1
 export KMP_DUPLICATE_LIB_OK=TRUE
 export PYTHONUNBUFFERED=1
 
+# setup.sh installs Python dependencies into ./venv. Use that interpreter
+# explicitly because activating a venv in setup.sh cannot persist into a
+# later shell invocation.
+if [ -x "$ROOT/venv/bin/python" ]; then
+  PYTHON="$ROOT/venv/bin/python"
+else
+  PYTHON="$(command -v python3 || true)"
+fi
+
+if [ -z "$PYTHON" ] || ! "$PYTHON" -c 'import fastapi, uvicorn' >/dev/null 2>&1; then
+  echo "ERROR: FastAPI backend dependencies are not installed."
+  echo "       Run: bash setup.sh"
+  exit 1
+fi
+
 start_api() {
   echo "▶ Starting FastAPI backend on http://localhost:8000 ..."
   cd "$ROOT"
-  uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload \
+  "$PYTHON" -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload \
     --log-level info
 }
 

@@ -65,6 +65,17 @@ else
 fi
 echo ""
 
+# Install the dependencies used by the FastAPI backend. Keep these separate
+# from the research/ML requirements so the dashboard can be started reliably.
+echo "Installing backend API dependencies..."
+if pip install -r requirements_api.txt; then
+    echo "[OK] Backend dependencies installed"
+else
+    echo "WARNING: Backend dependencies failed to install"
+    echo "         The frontend may start, but the API will not be available."
+fi
+echo ""
+
 # Step 6: Create necessary directories
 echo "Creating data directories..."
 mkdir -p data/results
