@@ -13,3 +13,19 @@ build/
 data/results/*.json
 data/*.csv
 test_repos/node_modules/
+
+# Frontend dependencies and build caches
+node_modules/
+frontend/.vite/
+frontend/dist/
+
+# Runtime and local tooling output
+*.log
+api_log.txt
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Mining caches
+*.mining-cache.json
