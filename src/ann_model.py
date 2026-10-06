@@ -184,25 +184,37 @@ def _train_fold(
     divergence_cap: float = None,
 ) -> float:
     """
-    Train on (X_train, y_train_transformed) and evaluate on (X_val, y_val_original).
-    If log_transform=True, predictions are back-transformed with expm1 before MSE.
-    Returns validation MSE on original scale.
+    Train on (X_train, y_train_transformed) using an inner validation split for early stopping,
+    and report the final model's error on the untouched outer fold (X_val, y_val_original).
+    If log_transform=True, predictions on the outer fold are back-transformed with expm1 before MSE.
+    Returns outer validation MSE on original scale.
 
     divergence_cap: if None, computed as 4× the naive-predictor MSE on y_val_original
     (predicting the training mean). This is data-adaptive and more principled than a
     hardcoded constant — a cap of 4× naive MSE flags diverged runs without penalising
     legitimate high-MSE outcomes on imbalanced splits.
     """
+    import copy
     import torch
     import torch.nn as nn
     import torch.optim as optim
     from torch.utils.data import DataLoader
+    from sklearn.model_selection import train_test_split
 
     # Compute adaptive cap: 4× the MSE of always predicting the training-set mean
     if divergence_cap is None:
         train_mean     = float(np.mean(y_val_original))
         naive_mse      = float(np.mean((y_val_original - train_mean) ** 2))
         divergence_cap = max(4.0 * naive_mse, 2.0)  # floor at 2.0 for tiny datasets
+
+    # Split off a small inner validation set (15%) from the training fold for early stopping
+    n_train = len(X_train)
+    if n_train >= 10:
+        X_tr, X_inner, y_tr, y_inner = train_test_split(
+            X_train, y_train_transformed, test_size=0.15, random_state=42
+        )
+    else:
+        X_tr, X_inner, y_tr, y_inner = X_train, X_train, y_train_transformed, y_train_transformed
 
     input_dim = X_train.shape[1]
     model     = _make_model(input_dim, hidden1=hidden1, hidden2=hidden2,
@@ -214,16 +226,21 @@ def _train_fold(
     )
 
     train_loader = DataLoader(
-        _make_dataset(X_train, y_train_transformed),
+        _make_dataset(X_tr, y_tr),
         batch_size=batch_size, shuffle=True
     )
-    val_loader = DataLoader(
+    inner_val_loader = DataLoader(
+        _make_dataset(X_inner, y_inner),
+        batch_size=batch_size, shuffle=False
+    )
+    outer_val_loader = DataLoader(
         _make_dataset(X_val, y_val_original),
         batch_size=batch_size, shuffle=False
     )
 
-    best_mse      = float('inf')
-    epochs_no_imp = 0
+    best_inner_mse = float('inf')
+    best_weights   = copy.deepcopy(model.state_dict())
+    epochs_no_imp  = 0
 
     for _ in range(epochs):
         model.train()
@@ -236,29 +253,43 @@ def _train_fold(
             optimizer.step()
 
         model.eval()
-        val_loss = 0.0
+        inner_loss = 0.0
         with torch.no_grad():
-            for bX, by in val_loader:
+            for bX, by in inner_val_loader:
                 raw_preds = model(bX)
-                if log_transform:
-                    raw_preds = torch.expm1(raw_preds.clamp(min=0))
-                val_loss += criterion(raw_preds, by).item()
+                inner_loss += criterion(raw_preds, by).item()
 
-        epoch_mse = val_loss / len(val_loader)
-        scheduler.step(epoch_mse)
+        epoch_inner_mse = inner_loss / max(1, len(inner_val_loader))
+        scheduler.step(epoch_inner_mse)
 
-        if epoch_mse < best_mse:
-            best_mse      = epoch_mse
-            epochs_no_imp = 0
+        if epoch_inner_mse < best_inner_mse:
+            best_inner_mse = epoch_inner_mse
+            best_weights   = copy.deepcopy(model.state_dict())
+            epochs_no_imp  = 0
         else:
             epochs_no_imp += 1
             if epochs_no_imp >= patience:
                 break
 
+    # Restore model parameters corresponding to the best inner validation checkpoint
+    model.load_state_dict(best_weights)
+
+    # Evaluate the final model on the UNTOUCHED outer validation fold
+    model.eval()
+    outer_loss = 0.0
+    with torch.no_grad():
+        for bX, by in outer_val_loader:
+            raw_preds = model(bX)
+            if log_transform:
+                raw_preds = torch.expm1(raw_preds.clamp(min=0))
+            outer_loss += criterion(raw_preds, by).item()
+
+    final_mse = outer_loss / max(1, len(outer_val_loader))
+
     # Guard: if ANN diverged (NaN or above the adaptive cap), return the cap.
-    if best_mse != best_mse or best_mse > divergence_cap:
+    if final_mse != final_mse or final_mse > divergence_cap:
         return divergence_cap
-    return best_mse
+    return final_mse
 
 
 # ---------------------------------------------------------------------------
