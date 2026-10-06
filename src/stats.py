@@ -13,8 +13,12 @@ Fix applied vs previous version:
 
 import json
 import os
+import sys
 import numpy as np
 from scipy.stats import wilcoxon
+
+# Ensure project root is on sys.path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def run_significance_tests(
@@ -149,12 +153,51 @@ def run_significance_tests(
 
 
 if __name__ == '__main__':
-    # Quick test — needs ga_results.json to exist
-    import json as _json
-    with open('data/results/ga_results.json') as f:
-        ga = _json.load(f)
+    import argparse
+    import pandas as pd
+
+    parser = argparse.ArgumentParser(description="Statistical Significance Testing (GA vs All Features)")
+    parser.add_argument("--csv", default=None,
+                        help="Path to preprocessed CSV dataset")
+    parser.add_argument("--ga-results", default="data/results/ga_results.json",
+                        help="Path to ga_results.json")
+    parser.add_argument("--chromosome", default=None,
+                        help="Comma-separated binary string (e.g. 1,0,1,1)")
+    parser.add_argument("--n-trials", type=int, default=20,
+                        help="Number of paired trials")
+    parser.add_argument("--output", default="data/results/stats_results.json",
+                        help="Output path for results JSON")
+    args = parser.parse_args()
+
+    # Determine CSV file path
+    csv_file = args.csv
+    if not csv_file:
+        for candidate in ["data/combined_dataset_clean.csv", "data/flask_dataset_clean.csv", "flask_dataset_processed.csv", "flask_dataset.csv"]:
+            if os.path.exists(candidate):
+                csv_file = candidate
+                break
+
+    if not csv_file or not os.path.exists(csv_file):
+        raise FileNotFoundError(f"Could not find a valid CSV dataset. Specify with --csv.")
+
+    # Determine chromosome
+    if args.chromosome:
+        chrom = tuple(int(x.strip()) for x in args.chromosome.split(","))
+    elif os.path.exists(args.ga_results):
+        with open(args.ga_results) as f:
+            ga_data = json.load(f)
+            chrom = tuple(ga_data.get('chromosome', []))
+    else:
+        # Default fallback subset if no ga_results yet
+        df_tmp = pd.read_csv(csv_file)
+        num_cols = df_tmp.select_dtypes(include=[np.number]).columns.tolist()
+        feat_cols = [c for c in num_cols if c != 'target_bug_proneness']
+        n_feats = len(feat_cols)
+        chrom = tuple([1 if i % 2 == 0 else 0 for i in range(n_feats)])
+
     run_significance_tests(
-        csv_file       = 'data/combined_dataset_clean.csv',
-        ga_chromosome  = tuple(ga['chromosome']),
-        n_trials       = 30,
+        csv_file      = csv_file,
+        ga_chromosome = chrom,
+        n_trials      = args.n_trials,
+        output_path   = args.output,
     )

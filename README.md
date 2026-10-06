@@ -70,7 +70,7 @@ Evaluated across three mature open-source Python repositories:
 | Requests | 35 | 4 | 71.4% | **0.220** |
 | FastAPI | 935 | 8 | 55.6% | **0.254** |
 
-The GA-ANN achieves **17.4% lower MSE** than the all-features baseline on FastAPI (Cohen's *d* = 1.615, large effect) while using **55.6% fewer features**.
+The GA-ANN achieves **14.8% lower MSE** than the all-features baseline on FastAPI (0.254 vs 0.298; Wilcoxon $p = 0.028$, Cohen's *d* = 0.74, medium-to-large effect) while using **55.6% fewer features** (8 vs 18).
 
 **Feature selection matrix** — which features the GA chose per repository:
 
@@ -78,21 +78,25 @@ The GA-ANN achieves **17.4% lower MSE** than the all-features baseline on FastAP
 |---|---|:---:|:---:|:---:|
 | `avg_cyclomatic_complexity` | Structural | ✓ | ✓ | ✓ |
 | `halstead_volume` | Structural | ✓ | — | — |
+| `halstead_effort` | Structural | — | — | — |
+| `depth_of_inheritance_tree` | Structural | — | — | — |
+| `number_of_methods_per_class` | Structural | — | — | ✓ |
+| `weighted_methods_per_class` | Structural | — | — | — |
 | `nesting_depth` | Structural | ✓ | — | — |
 | `class_coupling` | Structural | ✓ | — | — |
-| `maintainability_index` | Structural | — | ✓ | — |
-| `number_of_methods_per_class` | Structural | — | — | ✓ |
-| `loc` | Structural | — | — | ✓ |
-| `comment_ratio` | Textual | ✓ | ✓ | ✓ |
-| `blank_line_ratio` | Textual | ✓ | — | — |
-| `avg_line_length` | Textual | — | — | ✓ |
+| `comment_density` | Textual | ✓ | ✓ | ✓ |
+| `whitespace_ratio` | Textual | ✓ | — | — |
+| `docstring_presence` | Textual | — | — | ✓ |
+| `avg_identifier_length` | Textual | — | — | — |
+| `code_duplication_pct` | Textual | — | — | — |
 | `commit_frequency` | Evolutionary | ✓ | — | ✓ |
 | `author_count` | Evolutionary | ✓ | — | ✓ |
-| `code_churn` | Evolutionary | ✓ | — | — |
 | `bug_fix_ratio` | Evolutionary | ✓ | — | — |
-| `days_since_last_change` | Evolutionary | — | ✓ | ✓ |
+| `code_age_days` | Evolutionary | — | ✓ | ✓ |
+| `code_churn` | Evolutionary | ✓ | — | — |
+| `added_deleted_ratio` | Evolutionary | — | — | — |
 
-> **Key finding**: The GA consistently selects cross-dimensional subsets in every repository — it never settles on structural metrics alone. `avg_cyclomatic_complexity` and `comment_ratio` appear in all three repositories, establishing them as the most universally relevant predictors. This validates the core hypothesis that structural complexity must be paired with developer-activity and readability signals to accurately characterise maintainability risk — a finding the base paper could not make, as it used structural metrics only.
+> **Key finding**: The GA consistently selects cross-dimensional subsets in every repository — it never settles on structural metrics alone. `avg_cyclomatic_complexity` and `comment_density` appear in all three repositories, establishing them as the most universally relevant predictors. This validates the core hypothesis that structural complexity must be paired with developer-activity and readability signals to accurately characterise maintainability risk — a finding the base paper could not make, as it used structural metrics only.
 
 ---
 
@@ -125,7 +129,7 @@ Git Repository (source code + commit history)
 │                  ↑ accuracy    ↑ parsimony        │
 │                                                  │
 │  Operators: tournament selection (k=3),          │
-│  single-point crossover, adaptive exponential    │
+│  single-point crossover, adaptive linear         │
 │  mutation decay (μ₀=0.20 → μ_min=0.03)          │
 │  Elitism (top-2 preserved), memoisation cache   │
 └──────────────────────────────────────────────────┘
@@ -273,17 +277,17 @@ All features are split across three independent categories. A pairwise Pearson c
 
 **Category A — Structural** (8 features) — internal complexity at a fixed point in time
 
-`avg_cyclomatic_complexity`, `halstead_volume`, `number_of_methods_per_class`, `nesting_depth`, `class_coupling`, `maintainability_index`, `loc`, `num_classes`
+`avg_cyclomatic_complexity`, `halstead_volume`, `halstead_effort`, `depth_of_inheritance_tree`, `number_of_methods_per_class`, `weighted_methods_per_class`, `nesting_depth`, `class_coupling`
 
 **Category B — Textual** (5 features) — readability and documentation quality
 
-`avg_identifier_length`, `comment_ratio`, `blank_line_ratio`, `avg_line_length`, `code_duplication_pct`
+`comment_density`, `whitespace_ratio`, `docstring_presence`, `avg_identifier_length`, `code_duplication_pct`
 
 **Category C — Evolutionary** (6 features) — developer activity from Git history
 
-`commit_frequency`, `author_count`, `code_churn`, `added_deleted_ratio`, `days_since_last_change`, `bug_fix_ratio`
+`commit_frequency`, `author_count`, `bug_fix_ratio`, `code_age_days`, `code_churn`, `added_deleted_ratio`
 
-**Target variable**: `bug_fix_commits` — count of commits in the post-snapshot window containing keywords: *fix*, *bug*, *patch*, *issue*, *defect*.
+**Target variable**: `target_bug_proneness` — count of commits in the post-snapshot window containing keywords: *fix*, *bug*, *patch*, *issue*, *defect*, *resolve*, *error*.
 
 ---
 
@@ -325,11 +329,11 @@ All outputs are written to `data/results/`:
 
 | Argument | Default | Description |
 |---|---|---|
-| `--pop-size` | `15` | Chromosomes per generation |
-| `--generations` | `10` | Maximum generations |
+| `--pop-size` | `20` | Chromosomes per generation |
+| `--generations` | `30` | Maximum generations |
 | `--mutation-rate` | `0.20` | Initial per-gene mutation probability (μ₀) |
-| `--min-mutation` | `0.03` | Mutation rate floor after exponential decay |
-| `--stagnation` | `5` | Early-stop if no improvement for N generations |
+| `--min-mutation` | `0.03` | Mutation rate floor after linear decay |
+| `--stagnation` | `8` | Early-stop if no improvement for N generations |
 | `--alpha` | `1.0` | Accuracy weight in fitness function |
 | `--beta` | `0.5` | Parsimony weight in fitness function |
 
@@ -340,13 +344,14 @@ All outputs are written to `data/results/`:
 | `--run-tuning` | Run Optuna ANN hyperparameter search (50 trials) before GA |
 | `--run-baselines` | Compare GA-ANN vs All-Features vs Random vs XGB-GA |
 | `--run-ablation` | Test all 7 feature category combinations (A, B, C, A+B, A+C, B+C, A+B+C) |
-| `--run-stats` | Wilcoxon signed-rank test + Cohen's d over 5-trial MSE distributions |
+| `--run-stats` | Wilcoxon signed-rank test + Cohen's d over repeated trial MSE distributions |
+| `--run-held-out` | Evaluate GA-selected feature subset on an unseen held-out repository |
 | `--multi-repo` | Run GA across multiple repos (see `--repos`) |
 | `--repos` | Space-separated repo names (default: `flask requests fastapi`) |
 | `--run-sensitivity` | Sweep α ∈ {0.5,1.0,1.5,2.0}, β ∈ {0.1,0.5,1.0,2.0}, P ∈ {5,8,10,15} |
 | `--run-report` | Generate standalone HTML report |
 | `--run-all` | Enable everything above in one pass |
-| `--n-trials` | Trials per method for baselines/ablation/stats (default: 20) |
+| `--n-trials` | Trials per method for baselines/ablation/stats/held-out (default: 20) |
 
 ### Force / skip flags
 

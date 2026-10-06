@@ -176,6 +176,16 @@ def stage_report(processed_file, force):
     generate_report(processed_file)
 
 
+def stage_held_out(held_out_csv, n_trials, force):
+    _banner("STAGE 11 — Held-Out Repository Evaluation")
+    held_out_path = os.path.join(RESULTS_DIR, "held_out_results.json")
+    if not force and _skip(held_out_path, "Held-Out"):
+        return
+    chromosome = _load_ga_chromosome()
+    from src.held_out import evaluate_on_held_out
+    evaluate_on_held_out(held_out_csv, ga_chromosome=chromosome, n_trials=n_trials)
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def parse_args():
@@ -188,14 +198,15 @@ def parse_args():
     p.add_argument("--repo",            default="test_repos/flask")
     p.add_argument("--raw-file",        default="data/flask_dataset.csv")
     p.add_argument("--processed-file",  default="data/flask_dataset_clean.csv")
+    p.add_argument("--held-out-csv",    default="flask_dataset_processed.csv")
     p.add_argument("--timeframe-months",type=int, default=12)
 
     # GA
-    p.add_argument("--pop-size",        type=int,   default=15)
-    p.add_argument("--generations",     type=int,   default=10)
+    p.add_argument("--pop-size",        type=int,   default=20)
+    p.add_argument("--generations",     type=int,   default=30)
     p.add_argument("--mutation-rate",   type=float, default=0.20)
     p.add_argument("--min-mutation",    type=float, default=0.03)
-    p.add_argument("--stagnation",      type=int,   default=5)
+    p.add_argument("--stagnation",      type=int,   default=8)
     p.add_argument("--alpha",           type=float, default=1.0)
     p.add_argument("--beta",            type=float, default=0.5)
 
@@ -206,6 +217,7 @@ def parse_args():
     p.add_argument("--run-baselines",   action="store_true")
     p.add_argument("--run-ablation",    action="store_true")
     p.add_argument("--run-stats",       action="store_true")
+    p.add_argument("--run-held-out",    action="store_true")
     p.add_argument("--multi-repo",      action="store_true")
     p.add_argument("--repos",           nargs="+",  default=["flask", "requests", "django"])
     p.add_argument("--run-sensitivity", action="store_true")
@@ -236,6 +248,7 @@ def main():
         args.run_baselines  = True
         args.run_ablation   = True
         args.run_stats      = True
+        args.run_held_out   = True
         args.multi_repo     = True
         args.run_sensitivity = True
         args.run_report     = True
@@ -306,6 +319,10 @@ def main():
     # Stage 10: report
     if args.run_report:
         stage_report(args.processed_file, force=force_all)
+
+    # Stage 11: held-out evaluation
+    if args.run_held_out:
+        stage_held_out(args.held_out_csv, args.n_trials, force=force_all)
 
     _banner("PIPELINE COMPLETE ✓")
     print(f"  Results: {RESULTS_DIR}/")

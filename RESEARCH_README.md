@@ -97,7 +97,7 @@ Where:
 #### GA Operators
 - **Selection**: Tournament Selection (size $k=3$).
 - **Crossover**: Single-Point Crossover.
-- **Mutation**: Bit-flip mutation with **Adaptive Exponential Decay**, starting high to encourage exploration and cooling to refine the solution.
+- **Mutation**: Bit-flip mutation with **Adaptive Linear Decay**, starting high to encourage exploration and cooling to refine the solution.
 - **Elitism**: Top 2 chromosomes are preserved across generations.
 - **Memoization**: Fitness scores are cached to avoid redundant ANN training.
 
