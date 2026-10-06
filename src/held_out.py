@@ -29,6 +29,7 @@ from src.ann_model import train_and_evaluate_ann
 def evaluate_on_held_out(
     held_out_csv: str,
     ga_chromosome: tuple,
+    source_feature_names: list = None,
     n_trials: int       = 20,
     log_transform: bool = True,
     output_path: str    = "data/results/held_out_results.json",
@@ -39,6 +40,7 @@ def evaluate_on_held_out(
     Args:
         held_out_csv: Path to preprocessed CSV of the held-out repository.
         ga_chromosome: Binary tuple/list indicating feature mask.
+        source_feature_names: Optional list of feature names from the source dataset for name-based matching.
         n_trials: Number of repeated evaluation trials with varying seeds.
         log_transform: Whether to apply log1p transform on target variable.
         output_path: Output JSON path.
@@ -59,15 +61,25 @@ def evaluate_on_held_out(
     num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     feat_cols = [c for c in num_cols if c != 'target_bug_proneness']
     n_total_feats = len(feat_cols)
-    k_selected = int(sum(ga_chromosome))
 
-    ga_mask = list(ga_chromosome)
-    # Ensure length matches held-out features
-    if len(ga_mask) != n_total_feats:
-        if len(ga_mask) > n_total_feats:
-            ga_mask = ga_mask[:n_total_feats]
-        else:
+    # Name-based feature alignment if source feature names are provided
+    if source_feature_names and len(source_feature_names) == len(ga_chromosome):
+        selected_features_set = {
+            name for name, active in zip(source_feature_names, ga_chromosome)
+            if active == 1
+        }
+        ga_mask = [1 if c in selected_features_set else 0 for c in feat_cols]
+        print(f"  Mapped {sum(ga_mask)} features by column name to held-out schema.")
+    elif len(ga_chromosome) == n_total_feats:
+        ga_mask = list(ga_chromosome)
+    else:
+        # Fallback if names unavailable: warn and slice/pad
+        print("  [Warning] Source feature names unavailable; falling back to positional mapping.")
+        ga_mask = list(ga_chromosome[:n_total_feats])
+        if len(ga_mask) < n_total_feats:
             ga_mask = ga_mask + [0] * (n_total_feats - len(ga_mask))
+
+    k_selected = int(sum(ga_mask))
 
     ga_mses     = []
     all_mses    = []
@@ -199,12 +211,14 @@ def evaluate_on_held_out(
     return results
 
 
-def _load_chromosome(ga_results_path: str = "data/results/ga_results.json") -> tuple:
+def _load_chromosome(ga_results_path: str = "data/results/ga_results.json"):
     if os.path.exists(ga_results_path):
         with open(ga_results_path) as f:
             data = json.load(f)
-            return tuple(data.get('chromosome', []))
-    return None
+            chrom = tuple(data.get('chromosome', []))
+            feat_names = data.get('feature_names', None)
+            return chrom, feat_names
+    return None, None
 
 
 if __name__ == "__main__":
@@ -213,21 +227,27 @@ if __name__ == "__main__":
                         help="Path to preprocessed held-out CSV")
     parser.add_argument("--ga-results", default="data/results/ga_results.json",
                         help="Path to ga_results.json containing chromosome")
+    parser.add_argument("--source-features", default=None,
+                        help="Comma-separated feature names for source chromosome")
     parser.add_argument("--n-trials", type=int, default=20,
                         help="Number of repeated paired trials")
     parser.add_argument("--output", default="data/results/held_out_results.json",
                         help="Output path for held-out results JSON")
     args = parser.parse_args()
 
-    chrom = _load_chromosome(args.ga_results)
+    chrom, src_names = _load_chromosome(args.ga_results)
+    if args.source_features:
+        src_names = [f.strip() for f in args.source_features.split(",")]
+
     if chrom is None:
         df_tmp = pd.read_csv(args.held_out_csv)
         n_feats = len(df_tmp.select_dtypes(include=[np.number]).columns) - 1
         chrom = tuple([1 if i % 2 == 0 else 0 for i in range(n_feats)])
 
     evaluate_on_held_out(
-        held_out_csv  = args.held_out_csv,
-        ga_chromosome = chrom,
-        n_trials      = args.n_trials,
-        output_path   = args.output,
+        held_out_csv         = args.held_out_csv,
+        ga_chromosome        = chrom,
+        source_feature_names = src_names,
+        n_trials             = args.n_trials,
+        output_path          = args.output,
     )
